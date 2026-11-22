@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: evolution-postgres
+    command: >
+      postgres -c max_connections=500
+               -c shared_buffers=256MB
+               -c idle_in_transaction_session_timeout=30000
+               -c statement_timeout=60000
+               -c tcp_keepalives_idle=60
+               -c tcp_keepalives_interval=10
+               -c tcp_keepalives_count=3
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d evogo_sessions"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: evolution-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  evolution-go:
+    image: evoapicloud/evolution-go:latest
+    container_name: evolution-go
+    labels:
+      - "autoheal=true"
+    ports:
+      - "21465:21465"
+    environment:
+      SERVER_PORT: 21465
+
+      POSTGRES_AUTH_DB: "postgresql://postgres:root@postgres:5432/evogo_auth?sslmode=disable"
+      POSTGRES_USERS_DB: "postgresql://postgres:root@postgres:5432/evogo_users?sslmode=disable"
+      POSTGRES_SESSIONS_DB: "postgresql://postgres:root@postgres:5432/evogo_sessions?sslmode=disable"
+
+      DATABASE_SAVE_MESSAGES: "false"
+      CLIENT_NAME: "evolution"
+      DATABASE_CONNECTION_POOL_MAX_OPEN: "10"
+      DATABASE_CONNECTION_POOL_MAX_IDLE: "2"
+      DATABASE_CONNECTION_POOL_MAX_LIFETIME: "300000"
+      DATABASE_CONNECTION_POOL_MAX_IDLE_TIME: "120000"
+
+
+      GLOBAL_API_KEY: "11959779asdF@"
+
+      EVOLUTION_OPERATOR_EMAIL: "fjhonata14@gmail.com"
+
+      WADEBUG: "INFO"
+      LOGTYPE: "console"
+
+      WEBHOOK_FILES: "true"
+      CONNECT_ON_STARTUP: "true"
+
+      OS_NAME: "MASTER ZAP"
+
+      PASSKEY_PUBLIC_URL: "http://masterjf-solucoes.com.br:21465"
+
+      AMQP_URL: "amqp://admin:admin@rabbitmq:5672/default"
+      AMQP_GLOBAL_ENABLED: "false"
+
+      MINIO_ENABLED: "true"
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_BUCKET: "evolution-media"
+      MINIO_USE_SSL: "false"
+
+    volumes:
+      - ./build/server-alpine:/app/server
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --no-check-certificate http://localhost:21465/server/ok >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: "autoheal=true"
+      AUTOHEAL_INTERVAL: "5"
+      AUTOHEAL_START_PERIOD: "60"
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: "20"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  postgres_data:
+  minio_data:

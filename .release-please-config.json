@@ -1,0 +1,22 @@
+{
+  "release-type": "simple",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "evolution-go",
+      "extra-files": [
+        "VERSION",
+        "docker/examples/docker-compose.yml"
+      ]
+    }
+  },
+  "plugins": [
+    "release-please"
+  ],
+  "include-component-in-tag": false,
+  "pull-request-title-pattern": "chore(main): release ${version}",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "draft": false,
+  "prerelease": false
+}
